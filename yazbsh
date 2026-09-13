@@ -1,0 +1,215 @@
+#!/usr/bin/env zsh
+
+## Yet another Z-based shell (yazbsh)
+# Global path target recommendation: /usr/local/bin/yazbsh
+
+# ----------------------------------------------------
+# 1. ENVIRONMENT INITIALIZATION & DUAL-MODE CHECK
+# ----------------------------------------------------
+
+# ----------------------------------------------------
+# BUILT-IN COMMAND DEFINITIONS
+# ----------------------------------------------------
+
+source ~/.zshrc
+
+cprint() {
+    local fg="" bg="" nl="false"
+    while [[ "$1" == -* ]]; do
+        case "$1" in
+            -k) fg="black" ;; -r) fg="red" ;; -g) fg="green" ;; -y) fg="yellow" ;;
+            -b) fg="blue" ;; -m) fg="magenta" ;; -c) fg="cyan" ;; -w) fg="white" ;;
+            -K) bg="black" ;; -R) bg="red" ;; -G) bg="green" ;; -Y) bg="yellow" ;;
+            -B) bg="blue" ;; -M) bg="magenta" ;; -C) bg="cyan" ;; -W) bg="white" ;;
+            --no-newline) nl="true" ;;
+            *) builtin print "$@"; return $? ;;
+        esac
+        shift
+    done
+
+    local fmt=""
+    [[ -n "$bg" ]] && fmt+="%K{$bg}"
+    [[ -n "$fg" ]] && fmt+="%F{$fg}"
+    fmt+="$*\%f\%k"
+
+    if [[ "$nl" == "true" ]]; then
+        builtin print -nP "$fmt"
+    else
+        builtin print -P "$fmt"
+    fi
+}
+
+help() {
+    builtin print -P "\n%F{yellow}yazbsh help:%f"
+    builtin print -P "  %F{green}clear%f   - Wipes terminal screen canvas."
+    builtin print -P "  %F{green}cprint%f  - Prints colored text using -flags (lowercase=fg, UPPERCASE=bg)."
+    builtin print -P "  %F{green}exit%f    - Exits from %F{yellow}yazbsh%f to the previous shell."
+    builtin print -P "  %F{cyan}*other*%f  - Runs commands stored in the Z-Shell (zsh) \$PATH layout.\n"
+}
+
+date() {
+    builtin print -P "%F{yellow}date:%f %K{cyan}%F{black} %D — %*%f%k"
+}
+
+# Check for command-line arguments (-c string or script file)[cite: 5]
+if [[ -n "$1" ]]; then
+    if [[ "$1" == "-c" ]]; then
+        shift
+        # Enable pipefail and evaluate the command string directly
+        setopt pipefail
+        eval "$1"
+        exit $?
+    elif [[ -f "$1" ]]; then
+        # Enable pipefail inside script execution environment
+        setopt pipefail
+        # Dynamically execute the input script file using the Zsh core[cite: 5]
+        source "$1"
+        exit $?
+    else
+        print -P "%F{red}yazbsh error:%f File not found or unknown option: $1" >&2
+        exit 1
+    fi
+fi
+
+# Establish clean interactive workspace environment parameters
+clear
+print -P "%K{cyan}%F{black}  yazbsh v1.0  %f%k"
+print -P "Type %F{yellow}exit%f to drop back to the main zOS menu layout.\n"
+
+# Trap SIGINT (Ctrl+C) cleanly so it clears the line instead of killing the shell loop
+trap 'echo ""; continue' SIGINT
+trap 'sl; continue' SIGTSTP
+
+# Catch pipeline errors natively across command strings
+setopt pipefail
+
+# ----------------------------------------------------
+# 2. CORE COMMAND-LINE INTERPRETER (CLI) LOOP
+# ----------------------------------------------------
+while true; do
+    # Build an authentic interactive zOS terminal prompt profile
+    # Uses %* for perfect 24-hour time with seconds
+    # Uses %# to automatically show '#' for root and '%' for standard users (UID 501)
+    print -nP "%F{cyan}zOS%f:%F{blue}%~%f %F{green}#%f "
+    
+    # Read entire string inputs (allowing flags and spacing arguments)
+    if ! read -r cmd_string; then
+        print -P "\n%F{yellow}Goodbye :(%f"
+        break
+    fi
+    
+    # --- SYNTAX & COMMENT CLEANUP ENGINE ---
+    # 1. Strip comments out: slice everything from the first '#' to the end of line
+    cmd_string="${cmd_string%%#*}"
+    
+    # 2. Clean trailing whitespace strings
+    cmd_string="${cmd_string#"${cmd_string%%[![:space:]]*}"}"
+    cmd_string="${cmd_string%"${cmd_string##*[![:space:]]}"}"
+    
+    # 3. Prevent syntax crashes: skip empty inputs or rogue double semicolons ';;'
+    [[ -z "$cmd_string" ]] && continue
+    if [[ "${cmd_string//[ ;]/}" == "" ]]; then
+        continue
+    fi
+
+    # --- INTERCEPT BUILT-IN OVERRIDES ---
+    case "${cmd_string%% *}" in
+        exit)
+            print -P "\n%F{yellow}Goodbye :(%f"
+            sleep 0.4
+            break # Breaks loop, falling back cleanly to main menu engine
+            ;;
+            
+        clear)
+            clear
+            print -P "%K{cyan}%F{black}  yazbsh v1.0  %f%k\n"
+            continue
+            ;;
+            
+        help)
+            print -P "\n%F{yellow}yazbsh help:%f"
+            print -P "  %F{green}clear%f   - Wipes terminal screen canvas."
+            print -P "  %F{green}exit%f    - Exits from %F{yellow}yazbsh%f to the previous shell."
+            print -P "  %F{cyan}*other*%f  - Runs commands stored in the Z-Shell (zsh) \$PATH layout.\n"
+            continue
+            ;;
+            
+        date)
+            # Utilizing Zsh prompt string tokens for error-free date parsing
+            print -P "%F{yellow}date:%f %K{cyan}%F{black} %D — %*%f%k"
+            continue
+            ;;
+        cprint)
+            # Strip the command name itself ('zprint') off the argument list
+            local args="${cmd_string#* }"
+            [[ "$cmd_string" == "$args" ]] && args="" # Handle case where no args were passed
+            
+            local fg="" bg="" nl="false"
+            
+            # Parse leading flags from the argument string
+            while [[ "$args" == -* ]]; do
+                local flag="${args%% *}"
+                case "$flag" in
+                    -k) fg="black" ;;
+                    -r) fg="red" ;;
+                    -g) fg="green" ;;
+                    -y) fg="yellow" ;;
+                    -b) fg="blue" ;;
+                    -m) fg="magenta" ;;
+                    -c) fg="cyan" ;;
+                    -w) fg="white" ;;
+                    
+                    -K) bg="black" ;;
+                    -R) bg="red" ;;
+                    -G) bg="green" ;;
+                    -Y) bg="yellow" ;;
+                    -B) bg="blue" ;;
+                    -M) bg="magenta" ;;
+                    -C) bg="cyan" ;;
+                    -W) bg="white" ;;
+                    --no-newline) nl="true" ;;
+                    *) break ;;
+                esac
+                # Shift off the processed flag
+                if [[ "$args" == *" "* ]]; then
+                    args="${args#* }"
+                else
+                    args=""
+                    break
+                fi
+            done
+
+            # Build the Zsh prompt format string dynamically
+            local fmt=""
+            [[ -n "$bg" ]] && fmt+="%K{$bg}"
+            [[ -n "$fg" ]] && fmt+="%F{$fg}"
+            fmt+="$args%f%k"
+
+            if [[ "$nl" == "true" ]]; then
+                print -nP "$fmt"
+            else
+                print -P "$fmt"
+            fi
+            continue
+            ;;
+        about)
+            print -P "%K{cyan}%F{black}          %f%k"
+            print -P "%K{cyan}%F{black}          %f%k"
+            print -P "%K{cyan}%F{black}        __%f%k"
+            print -P "%K{cyan}%F{black}         /%f%k"
+            print -P "%K{cyan}%F{black}        /_%f%k\n"
+
+            print -P "%K{cyan}%F{black}yazbsh%f%k: a %F{yellow}Z-Based%f shell by %F{green}Ivab Gaming%f"
+            continue
+            ;;
+    esac
+
+    # ----------------------------------------------------
+    # 3. NATIVE ENVIRONMENT SYSTEM EVALUATION
+    # ----------------------------------------------------
+    # Safely evaluate and execute commands (handles pipes '|', '2>', and operators natively)
+    eval "$cmd_string"
+    
+    # Optional: Capture exit statuses here if you want to track task success
+    export STATUS=$?
+done
