@@ -1,0 +1,55 @@
+#!/usr/bin/env zsh
+
+## Yet another Z-based shell (yazbsh)
+
+# Establish clean workspace environment parameters
+clear
+print -P "%K{cyan}%F{black}  yazbsh v1.0  %f%k"
+print -P "Type %F{yellow}exit%f to drop back to the main zOS menu layout.\n"
+trap 'echo ""; continue' INT
+
+# Catch pipe ('|') errors
+setopt pipefail
+
+# Core Command-Line Interpreter (CLI) Shell Loop
+while true; do
+    # Build a custom interactive zOS terminal prompt profile
+    # Displays user@zOS inside a stylized workspace framework
+    print -nP "%F{cyan}zOS%f:%F{blue}%~%f %F{green}#%f "
+    
+    # Read entire string inputs (allowing flags and spacing arguments)
+    read -r cmd_string
+    
+    # 1. Catch absolute intercept flags before passing to system
+    case "${cmd_string%% *}" in
+        exit)
+            print -P "\n%F{yellow}Goodbye :(%f"
+            sleep 0.4
+            break # Breaks loop, falling back cleanly to main menu engine
+            ;;
+            
+        clear)
+            clear
+            print -P "%K{cyan}%F{black}  yazbsh v1.0  %f%k\n"
+            continue
+            ;;
+            
+        help)
+            print -P "\n%F{yellow}yazbsh help:%f"
+            print -P "  %F{green}clear%f   - Wipes terminal screen canvas."
+            print -P "  %F{green}exit%f    - Exits from %F{yellow}yazbsh%f to the previous shell."
+            print -P "  %F{cyan}*other*%f  - Runs commands stored in the Z-Shell (zsh) \$PATH located at ~/.zshrc.\n"
+            continue
+            ;;
+        date)
+            print -P "%F{yellow}date:%f %K{cyan}%F{black} %D — %D{%H:%M:%S}%f%k"
+            ;;
+        \#)
+            ;;
+    esac
+
+    # 2. Safely evaluate and execute native environment system commands
+    if [[ -n "$cmd_string" ]]; then
+        eval "$cmd_string"
+    fi
+done
